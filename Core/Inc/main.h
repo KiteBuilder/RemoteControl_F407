@@ -31,7 +31,10 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "mb.h"
+#include "mbport.h"
+#include "mt_port.h"
+#include "mbutils.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -57,6 +60,14 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define STOP_KEY_Pin GPIO_PIN_5
+#define STOP_KEY_GPIO_Port GPIOE
+#define RETURN_KEY_Pin GPIO_PIN_6
+#define RETURN_KEY_GPIO_Port GPIOE
+#define START_KEY_Pin GPIO_PIN_7
+#define START_KEY_GPIO_Port GPIOI
+#define PRELOAD_KEY_Pin GPIO_PIN_6
+#define PRELOAD_KEY_GPIO_Port GPIOI
 #define EN_5EXT_Pin GPIO_PIN_2
 #define EN_5EXT_GPIO_Port GPIOI
 #define OSC_En_Pin GPIO_PIN_15
@@ -67,12 +78,16 @@ void Error_Handler(void);
 #define OLED_DB7_GPIO_Port GPIOF
 #define OLED_DB5_Pin GPIO_PIN_15
 #define OLED_DB5_GPIO_Port GPIOF
+#define LOCK_KEY_Pin GPIO_PIN_11
+#define LOCK_KEY_GPIO_Port GPIOE
 #define OLED_RW_Pin GPIO_PIN_7
 #define OLED_RW_GPIO_Port GPIOA
 #define OLED_E_Pin GPIO_PIN_1
 #define OLED_E_GPIO_Port GPIOB
 #define OLED_DB4_Pin GPIO_PIN_0
 #define OLED_DB4_GPIO_Port GPIOB
+#define WINDOW_KEY_Pin GPIO_PIN_11
+#define WINDOW_KEY_GPIO_Port GPIOF
 #define OLED_DB6_Pin GPIO_PIN_7
 #define OLED_DB6_GPIO_Port GPIOE
 #define LedOut_Pin GPIO_PIN_10
@@ -80,6 +95,19 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+#define MODBUS_SLAVE_ADDRESS     0x03 //Modbus slave address(ID)
+
+#define REG_COILS_START          1
+#define REG_COILS_NREGS          2
+
+#define REG_DISCRETE_COILS_START 1
+#define REG_DISCRETE_NREGS       1
+
+#define REG_INPUT_START          1
+#define REG_INPUT_NREGS          4
+
+#define REG_HOLDING_START        1
+#define REG_HOLDING_NREGS        4
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

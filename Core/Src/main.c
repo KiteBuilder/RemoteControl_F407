@@ -18,11 +18,13 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <stdbool.h>
 #include "OLED_1602.h"
+#include "Key.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,7 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define POLLING_TIME    10 //keys checked every 10ms
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,7 +48,14 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
+//Keys declaration
+key_t preload_key, start_key, return_key, stop_key, lock_key, window_key;
 
+bool f_polling; //true if polling counter is equal to polling period
+uint32_t polling_cnt; //polling counter
+uint32_t polling_period; //10ms if SysTick configured for 1ms tick interrupt
+
+char oled_str[LCD_STR_LEN];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,6 +65,17 @@ static void MX_TIM3_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
+
+//Keys handlers and init methods
+void Keys_Init(void);
+void Keys_Polling(void);
+
+void Preload_Key_Handler(key_state_e);
+void Start_Key_Handler(key_state_e);
+void Return_Key_Handler(key_state_e);
+void Stop_Key_Handler(key_state_e);
+void Lock_Key_Handler(key_state_e);
+void Window_Key_Handler(key_state_e);
 
 /* USER CODE END PFP */
 
@@ -80,7 +100,9 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  f_polling =  false;
+  polling_cnt = 0;
+  polling_period = POLLING_TIME/uwTickFreq;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -98,32 +120,51 @@ int main(void)
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
-  //__disable_irq();
 
   HAL_GPIO_LockPin(OSC_En_GPIO_Port, OSC_En_Pin); //LOCK this pin settings because they are important - this pin enables HSE generator
   HAL_GPIO_LockPin(EN_5EXT_GPIO_Port, EN_5EXT_Pin); //LOCK this pin - this pin enables 5V circuit
 
-  HAL_TIM_Base_Start_IT(&htim3);
+  Keys_Init(); //Initialize keys
 
-  OLED_Init(); //initialize LCD display
-  OLED_Clear(); //clear display
-  OLED_HideCursor(); //hide cursor
+  OLED_Init();       //Initialize OLED display
+  OLED_Clear();      //Clear display
+  OLED_HideCursor(); //Hide cursor
 
-  char str[16];
-  sprintf(str, "Test string");
-  OLED_GoTo(0x01);
-  OLED_PutStr(str);
-  sprintf(str, "%lc%lc %d%d",160,161, 100, 500);
-  OLED_GoTo(0x40);
-  OLED_PutStr(str);
+  sprintf(oled_str, "Check OLED");
+  OLED_GoTo(0x00);
+  OLED_PutStr(oled_str);
+  sprintf(oled_str, "Press any key");
 
-  //__enable_irq();
+  //Initialize ModbusRTU module and enable it
+  __disable_irq();
+  MT_PORT_SetTimerModule(&htim3);
+  MT_PORT_SetUartModule(&huart1); //use uart1 for debug purposes
+  eMBErrorCode eStatus;
+  eStatus = eMBInit(MB_RTU, MODBUS_SLAVE_ADDRESS, 0, huart1.Init.BaudRate, MB_PAR_NONE);
+  eStatus = eMBEnable();
+  if (eStatus != MB_ENOERR)
+  {
+      // Error handling
+  }
+  __enable_irq();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
+      //Here checked all keys, set all LEDs, etc
+      if (f_polling == true)
+      {
+          f_polling = false;
+
+          Keys_Polling();
+
+          OLED_GoTo(0x40);
+          OLED_PutStr(oled_str);
+      }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -275,13 +316,13 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOI_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(EN_5EXT_GPIO_Port, EN_5EXT_Pin, GPIO_PIN_SET);
@@ -300,6 +341,18 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, OLED_DB6_Pin|LedOut_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : STOP_KEY_Pin RETURN_KEY_Pin LOCK_KEY_Pin */
+  GPIO_InitStruct.Pin = STOP_KEY_Pin|RETURN_KEY_Pin|LOCK_KEY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : START_KEY_Pin PRELOAD_KEY_Pin */
+  GPIO_InitStruct.Pin = START_KEY_Pin|PRELOAD_KEY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOI, &GPIO_InitStruct);
 
   /*Configure GPIO pin : EN_5EXT_Pin */
   GPIO_InitStruct.Pin = EN_5EXT_Pin;
@@ -336,6 +389,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : WINDOW_KEY_Pin */
+  GPIO_InitStruct.Pin = WINDOW_KEY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(WINDOW_KEY_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : OLED_DB6_Pin */
   GPIO_InitStruct.Pin = OLED_DB6_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -356,21 +415,185 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void HAL_SYSTICK_Callback()
+void HAL_SYSTICK_Callback(void)
 {
-
+    if(++polling_cnt == polling_period)
+    {
+        f_polling = true;
+        polling_cnt = 0;
+    }
 }
 
 /**
-  * @brief Timer tim10 elapsed period callback
+  * @brief Initialize keys structures
+  * @param None
   * @retval None
   */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void Keys_Init(void)
 {
-    if (htim->Instance == TIM3)
-    {
+    Key_Init(&preload_key, PRELOAD_KEY_GPIO_Port, PRELOAD_KEY_Pin, LO_LEVEL, &Preload_Key_Handler);
+    Key_Init(&start_key  , START_KEY_GPIO_Port  , START_KEY_Pin  , LO_LEVEL, &Start_Key_Handler);
+    Key_Init(&return_key , RETURN_KEY_GPIO_Port , RETURN_KEY_Pin , LO_LEVEL, &Return_Key_Handler);
+    Key_Init(&stop_key   , STOP_KEY_GPIO_Port   , STOP_KEY_Pin   , LO_LEVEL, &Stop_Key_Handler);
+    Key_Init(&lock_key   , LOCK_KEY_GPIO_Port   , LOCK_KEY_Pin   , LO_LEVEL, &Lock_Key_Handler);
+    Key_Init(&window_key , WINDOW_KEY_GPIO_Port , WINDOW_KEY_Pin , LO_LEVEL, &Window_Key_Handler);
+}
 
+/**
+  * @brief Check all keys state in polling
+  * @param None
+  * @retval None
+  */
+void Keys_Polling(void)
+{
+    Key_CheckState(&preload_key);
+    Key_CheckState(&start_key);
+    Key_CheckState(&return_key);
+    Key_CheckState(&stop_key);
+    Key_CheckState(&lock_key);
+    Key_CheckState(&window_key);
+}
+
+/**
+  * @brief Preload key handler
+  * @param state: state of the key - pressed/released
+  * @retval None
+  */
+void Preload_Key_Handler(key_state_e state)
+{
+    if (state == PRESSED)
+    {
+        sprintf(oled_str, "Preload %d      ", state);
     }
+    else
+    {
+        sprintf(oled_str, "Preload %d      ", state);
+    }
+}
+
+/**
+  * @brief Start key handler
+  * @param state: state of the key - pressed/released
+  * @retval None
+  */
+void Start_Key_Handler(key_state_e state)
+{
+    if (state == PRESSED)
+    {
+        sprintf(oled_str, "Start %d        ", state);
+    }
+    else
+    {
+        sprintf(oled_str, "Start %d        ", state);
+    }
+}
+
+/**
+  * @brief Return key handler
+  * @param state: state of the key - pressed/released
+  * @retval None
+  */
+void Return_Key_Handler(key_state_e state)
+{
+    if (state == PRESSED)
+    {
+        sprintf(oled_str, "Return %d      ", state);
+    }
+    else
+    {
+        sprintf(oled_str, "Return %d      ", state);
+    }
+}
+
+/**
+  * @brief Stop key handler
+  * @param state: state of the key - pressed/released
+  * @retval None
+  */
+void Stop_Key_Handler(key_state_e state)
+{
+    if (state == PRESSED)
+    {
+        sprintf(oled_str, "Stop %d        ", state);
+    }
+    else
+    {
+        sprintf(oled_str, "Stop %d        ", state);
+    }
+}
+
+/**
+  * @brief Lock key handler
+  * @param state: state of the key - pressed/released
+  * @retval None
+  */
+void Lock_Key_Handler(key_state_e state)
+{
+    if (state == PRESSED)
+    {
+        sprintf(oled_str, "Lock %d        ", state);
+    }
+    else
+    {
+        sprintf(oled_str, "Lock %d        ", state);
+    }
+}
+
+/**
+  * @brief Window key handler
+  * @param state: state of the key - pressed/released
+  * @retval None
+  */
+void Window_Key_Handler(key_state_e state)
+{
+    if (state == PRESSED)
+    {
+        sprintf(oled_str, "Window %d      ", state);
+    }
+    else
+    {
+        sprintf(oled_str, "Window %d      ", state);
+    }
+}
+
+/**
+  * @brief
+  * @retval eMBErrorCode
+  */
+eMBErrorCode eMBRegInputCB(uint8_t *pucRegBuffer, uint16_t usAddress, uint16_t usNRegs)
+{
+
+    return MB_ENOERR;
+}
+
+/**
+  * @brief
+  * @retval eMBErrorCode
+  */
+eMBErrorCode eMBRegHoldingCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t usNRegs, eMBRegisterMode eMode)
+{
+
+    return MB_ENOERR;
+}
+
+/**
+  * @brief
+  * @retval eMBErrorCode
+  */
+eMBErrorCode eMBRegCoilsCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t usNCoils, eMBRegisterMode eMode)
+{
+
+    return MB_ENOERR;
+}
+
+/**
+  * @brief
+  * @retval eMBErrorCode
+  */
+eMBErrorCode eMBRegDiscreteCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t usNDiscrete)
+{
+
+    return MB_ENOERR;
 }
 
 

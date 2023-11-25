@@ -57,7 +57,7 @@ uint32_t DWT_Delay_Init(void)
   */
 inline void delayUS_DWT(uint32_t us)
 {
-    volatile uint32_t cycles = (SystemCoreClock/1000000L)*us; // Go to number of cycles for system
+    volatile uint32_t cycles = (SystemCoreClock/1000000L) * us; // Go to number of cycles for system
     volatile uint32_t start = DWT->CYCCNT;
 
     do

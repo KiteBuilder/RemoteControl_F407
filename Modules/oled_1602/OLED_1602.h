@@ -13,26 +13,26 @@
 #define _OLED_1602_MODULE_H_
 
 //OLED display pins mapping
-#define OLED_RW_Pin GPIO_PIN_7
-#define OLED_RW_GPIO_Port GPIOA
+#define OLED_RW_Pin         GPIO_PIN_7
+#define OLED_RW_GPIO_Port   GPIOA
 
-#define OLED_RS_Pin GPIO_PIN_9
-#define OLED_RS_GPIO_Port GPIOF
+#define OLED_RS_Pin         GPIO_PIN_9
+#define OLED_RS_GPIO_Port   GPIOF
 
-#define OLED_E_Pin GPIO_PIN_1
-#define OLED_E_GPIO_Port GPIOB
+#define OLED_E_Pin          GPIO_PIN_1
+#define OLED_E_GPIO_Port    GPIOB
 
-#define OLED_DB4_Pin GPIO_PIN_0
-#define OLED_DB4_GPIO_Port GPIOB
+#define OLED_DB4_Pin        GPIO_PIN_0
+#define OLED_DB4_GPIO_Port  GPIOB
 
-#define OLED_DB5_Pin GPIO_PIN_15
-#define OLED_DB5_GPIO_Port GPIOF
+#define OLED_DB5_Pin        GPIO_PIN_15
+#define OLED_DB5_GPIO_Port  GPIOF
 
-#define OLED_DB6_Pin GPIO_PIN_7
-#define OLED_DB6_GPIO_Port GPIOE
+#define OLED_DB6_Pin        GPIO_PIN_7
+#define OLED_DB6_GPIO_Port  GPIOE
 
-#define OLED_DB7_Pin GPIO_PIN_12
-#define OLED_DB7_GPIO_Port GPIOF
+#define OLED_DB7_Pin        GPIO_PIN_12
+#define OLED_DB7_GPIO_Port  GPIOF
 
 //Instruction codes
 #define CLEAR_DISPLAY_CMD       0x0001 //2-6ms delay required after this command

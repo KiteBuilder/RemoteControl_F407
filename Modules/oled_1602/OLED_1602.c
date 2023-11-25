@@ -48,12 +48,23 @@ void OLED_Init(void)
 {
     DWT_Delay_Init();
 
+    OLED_BusToWrite();
+
     OLED_RW(GPIO_PIN_RESET);
     OLED_E(GPIO_PIN_RESET);
     OLED_RS(GPIO_PIN_RESET);
-    OLED_BusSetVal(0x04);
     
-    _delay_ms(10);
+    _delay_ms(15);
+    OLED_BusSetVal(0x03);
+    OLED_Latch();
+    _delay_ms(5);
+    OLED_Latch();
+    _delay_us(100);
+    OLED_Latch();
+    _delay_us(50);
+    OLED_BusSetVal(0x02);
+    OLED_Latch();
+    _delay_us(50);
     
     OLED_ExecCmd(FUNCTION_SET, N_BIT | FT1);        //set up functionality:
     OLED_WaitUntilBusy();                           //4 bit mode
