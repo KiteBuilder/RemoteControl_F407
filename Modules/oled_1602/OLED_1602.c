@@ -145,7 +145,7 @@ static uint8_t OLED_ExecCmd(uint16_t cmd, uint8_t opt)
   * @param None
   * @retval None
   */
-void OLED_Latch(void)
+static void OLED_Latch(void)
 {
    OLED_E(GPIO_PIN_SET);
    _delay_us(2);

@@ -56,6 +56,10 @@ uint32_t polling_cnt; //polling counter
 uint32_t polling_period; //10ms if SysTick configured for 1ms tick interrupt
 
 char oled_str[LCD_STR_LEN];
+bool f_update_str1, f_update_str2;
+uint8_t menu_index;
+uint8_t max_index;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -66,9 +70,9 @@ static void MX_USART1_UART_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 
-//Keys handlers and init methods
-void Keys_Init(void);
-void Keys_Polling(void);
+//Keys handlers and initialize methods
+static void Keys_Init(void);
+static void Keys_Polling(void);
 
 void Preload_Key_Handler(key_state_e);
 void Start_Key_Handler(key_state_e);
@@ -77,10 +81,43 @@ void Stop_Key_Handler(key_state_e);
 void Lock_Key_Handler(key_state_e);
 void Window_Key_Handler(key_state_e);
 
+void OLED_Str1_Handler(char*, uint8_t);
+void OLED_Str2_Handler(char*);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+//ModbusRTU variables
+//
+//Modbus holding registers and registers array
+uint16_t pressure_M1, pressure_M2, pressure_M3, pressure_M4, accum_voltage, tempr_compr_RT1, error_code;
+
+uint16_t *modbus_holding_regs[] = {&pressure_M1, //M1, main receiver 0.0 - 25.0Bar
+                                   &pressure_M2, //M2, control receiver 0.0 - 25.0Bar
+                                   &pressure_M3, //M3, pressure in the rod cavity area of the working cylinder xx.xBar
+                                   &pressure_M4, //M4, working cylinder pressure 0.0-25.0Bar
+                                   &accum_voltage, //Compressor accumulator voltage 0.0-16.0V
+                                   &tempr_compr_RT1, //Compressor body temperature 0-120C
+                                   &error_code}; //Error code E00-E99 (E00 - no error)
+
+//Modbus coils - status register
+uint8_t status_register;
+
+#define MANUAL_MODE_BIT     0x01 // Mode for testing the system
+#define START_MODE_BIT      0x02 // Mode for running the system up
+#define FAILURE_BIT         0x04 // Emergency system mode
+#define CHOCK_SET_BIT       0x08 // To set if the chock set in the carriage lock
+
+//Modbus contacts - control register
+uint8_t control_register;
+
+#define PRELOAD_BIT         0x01 // To supply a low pressure to the main cylinder
+#define START_BIT           0x02 // To supply a full pressure to the main cylinder
+#define RETURN_BIT          0x04 // To release the pressure in the main cylinder and supply a low pressure to the rod cavity area for return the system to the initial state
+#define STOP_BIT            0x08 // To set all valves to the safe state with fixation
+#define LOCK_BIT            0x10 // To lock the remote control all operations
 
 /* USER CODE END 0 */
 
@@ -103,6 +140,14 @@ int main(void)
   f_polling =  false;
   polling_cnt = 0;
   polling_period = POLLING_TIME/uwTickFreq;
+
+  pressure_M1 = pressure_M2 = pressure_M3 = pressure_M4 = accum_voltage = tempr_compr_RT1 = error_code = 0;
+  status_register = 0;
+  control_register = 0;
+
+  f_update_str1 = f_update_str2 = true; //first time OLED display should be updated
+  menu_index = 0;
+  max_index = sizeof(modbus_holding_regs) / 4;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -130,11 +175,6 @@ int main(void)
   OLED_Clear();      //Clear display
   OLED_HideCursor(); //Hide cursor
 
-  sprintf(oled_str, "Check OLED");
-  OLED_GoTo(0x00);
-  OLED_PutStr(oled_str);
-  sprintf(oled_str, "Press any key");
-
   //Initialize ModbusRTU module and enable it
   __disable_irq();
   MT_PORT_SetTimerModule(&htim3);
@@ -161,8 +201,22 @@ int main(void)
 
           Keys_Polling();
 
-          OLED_GoTo(0x40);
-          OLED_PutStr(oled_str);
+          if(f_update_str1 == true)
+          {
+              f_update_str1 = false;
+              OLED_Str1_Handler(oled_str, menu_index);
+              OLED_GoTo(0x00);
+              OLED_PutStr(oled_str);
+          }
+
+          if(f_update_str2 == true)
+          {
+              f_update_str2 = false;
+              OLED_Str2_Handler(oled_str);
+              OLED_GoTo(0x40);
+              OLED_PutStr(oled_str);
+          }
+
       }
 
     /* USER CODE END WHILE */
@@ -429,7 +483,7 @@ void HAL_SYSTICK_Callback(void)
   * @param None
   * @retval None
   */
-void Keys_Init(void)
+static void Keys_Init(void)
 {
     Key_Init(&preload_key, PRELOAD_KEY_GPIO_Port, PRELOAD_KEY_Pin, LO_LEVEL, &Preload_Key_Handler);
     Key_Init(&start_key  , START_KEY_GPIO_Port  , START_KEY_Pin  , LO_LEVEL, &Start_Key_Handler);
@@ -444,7 +498,7 @@ void Keys_Init(void)
   * @param None
   * @retval None
   */
-void Keys_Polling(void)
+static void Keys_Polling(void)
 {
     Key_CheckState(&preload_key);
     Key_CheckState(&start_key);
@@ -463,11 +517,7 @@ void Preload_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
-        sprintf(oled_str, "Preload %d      ", state);
-    }
-    else
-    {
-        sprintf(oled_str, "Preload %d      ", state);
+        SET_BIT(control_register, PRELOAD_BIT);
     }
 }
 
@@ -480,11 +530,7 @@ void Start_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
-        sprintf(oled_str, "Start %d        ", state);
-    }
-    else
-    {
-        sprintf(oled_str, "Start %d        ", state);
+        SET_BIT(control_register, START_BIT);
     }
 }
 
@@ -497,11 +543,7 @@ void Return_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
-        sprintf(oled_str, "Return %d      ", state);
-    }
-    else
-    {
-        sprintf(oled_str, "Return %d      ", state);
+        SET_BIT(control_register, RETURN_BIT);
     }
 }
 
@@ -514,11 +556,7 @@ void Stop_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
-        sprintf(oled_str, "Stop %d        ", state);
-    }
-    else
-    {
-        sprintf(oled_str, "Stop %d        ", state);
+        SET_BIT(control_register, STOP_BIT);
     }
 }
 
@@ -531,11 +569,7 @@ void Lock_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
-        sprintf(oled_str, "Lock %d        ", state);
-    }
-    else
-    {
-        sprintf(oled_str, "Lock %d        ", state);
+        SET_BIT(control_register, LOCK_BIT);
     }
 }
 
@@ -548,12 +582,61 @@ void Window_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
-        sprintf(oled_str, "Window %d      ", state);
+        if (++menu_index == max_index - 1)
+        {
+            menu_index = 0;
+        }
+
+        f_update_str1 = true;
     }
-    else
+}
+
+/**
+  * @brief OLED string-1 handler
+  * @param p_str: pointer to string
+  * @retval None
+  */
+void OLED_Str1_Handler(char* p_str, uint8_t index)
+{
+    switch (index)
     {
-        sprintf(oled_str, "Window %d      ", state);
+        case 0:
+            sprintf(oled_str, "M1Pres=%2d.%01dBar ", pressure_M1 / 10, pressure_M1 % 10);
+            break;
+
+        case 1:
+            sprintf(oled_str, "M2Pres=%2d.%01dBar ", pressure_M2 / 10, pressure_M2 % 10);
+            break;
+
+        case 2:
+            sprintf(oled_str, "M3Pres=%2d.%01dBar ", pressure_M3 / 10, pressure_M3 % 10);
+            break;
+
+        case 3:
+            sprintf(oled_str, "M4Pres=%2d.%01dBar ", pressure_M4 / 10, pressure_M4 % 10);
+            break;
+
+        case 4:
+            sprintf(oled_str, "Voltage=%2d.%01dV  ", accum_voltage / 10, accum_voltage % 10);
+            break;
+
+        case 5:
+            sprintf(oled_str, "RT1Temp=%3dC  ", tempr_compr_RT1);
+            break;
+
+        default:
+
     }
+}
+
+/**
+  * @brief OLED string-2 handler
+  * @param p_str: pointer to string
+  * @retval None
+  */
+void OLED_Str2_Handler(char*)
+{
+    sprintf(oled_str, "Status-E%02d     ", error_code);
 }
 
 /**
