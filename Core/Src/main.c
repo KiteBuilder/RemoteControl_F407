@@ -84,6 +84,11 @@ void Window_Key_Handler(key_state_e);
 void OLED_Str1_Handler(char*, uint8_t);
 void OLED_Str2_Handler(char*);
 
+extern void HAL_TIM_PeriodElapsedCallback_Modbus(TIM_HandleTypeDef*);
+extern void HAL_UART_RxCpltCallback_modbus(UART_HandleTypeDef*);
+extern void HAL_UART_TxCpltCallback_modbus(UART_HandleTypeDef *huart);
+
+static void StatusRegister_Handler(uint32_t);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -141,13 +146,13 @@ int main(void)
   polling_cnt = 0;
   polling_period = POLLING_TIME/uwTickFreq;
 
-  pressure_M1 = pressure_M2 = pressure_M3 = pressure_M4 = accum_voltage = tempr_compr_RT1 = error_code = 0;
-  status_register = 0;
-  control_register = 0;
+  pressure_M1 = pressure_M2 = pressure_M3 = pressure_M4 = accum_voltage = tempr_compr_RT1 = error_code = 0x00;
+  status_register = 0x00;
+  control_register = 0x00;
 
   f_update_str1 = f_update_str2 = true; //first time OLED display should be updated
   menu_index = 0;
-  max_index = sizeof(modbus_holding_regs) / 4;
+  max_index = sizeof(modbus_holding_regs) / 4 - 1;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -194,6 +199,8 @@ int main(void)
 
   while (1)
   {
+      eMBPoll(); //Modbus polling function
+
       //Here checked all keys, set all LEDs, etc
       if (f_polling == true)
       {
@@ -272,9 +279,6 @@ void SystemClock_Config(void)
   */
 static void MX_NVIC_Init(void)
 {
-  /* USART1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(USART1_IRQn, 3, 0);
-  HAL_NVIC_EnableIRQ(USART1_IRQn);
   /* TIM3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(TIM3_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(TIM3_IRQn);
@@ -371,12 +375,12 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOE_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOI_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(EN_5EXT_GPIO_Port, EN_5EXT_Pin, GPIO_PIN_SET);
@@ -475,6 +479,36 @@ void HAL_SYSTICK_Callback(void)
     {
         f_polling = true;
         polling_cnt = 0;
+    }
+}
+
+/**
+  * @brief UART RX complete callback
+  * @retval None
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    HAL_UART_RxCpltCallback_modbus(huart);
+}
+
+/**
+  * @brief UART TX complete callback
+  * @retval None
+  */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    HAL_UART_TxCpltCallback_modbus(huart);
+}
+
+/**
+  * @brief Timer tim10 elapsed period callback
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM3)
+    {
+        HAL_TIM_PeriodElapsedCallback_Modbus(htim);
     }
 }
 
@@ -582,7 +616,7 @@ void Window_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
-        if (++menu_index == max_index - 1)
+        if (++menu_index == max_index)
         {
             menu_index = 0;
         }
@@ -645,8 +679,27 @@ void OLED_Str2_Handler(char*)
   */
 eMBErrorCode eMBRegInputCB(uint8_t *pucRegBuffer, uint16_t usAddress, uint16_t usNRegs)
 {
+    eMBErrorCode eStatus = MB_ENOERR;
+    uint32_t iRegIndex;
 
-    return MB_ENOERR;
+    if ((usAddress >= REG_INPUT_START) &&
+        (usAddress + usNRegs <= REG_INPUT_START + REG_INPUT_NREGS))
+    {
+        iRegIndex = (uint32_t)(usAddress - REG_INPUT_START);
+        while(usNRegs > 0)
+        {
+            *pucRegBuffer++ = *modbus_holding_regs[iRegIndex] >> 8;
+            *pucRegBuffer++ = *modbus_holding_regs[iRegIndex] & 0xFF;
+            iRegIndex++;
+            usNRegs--;
+        }
+    }
+    else
+    {
+        eStatus = MB_ENOREG;
+    }
+
+    return eStatus;
 }
 
 /**
@@ -655,8 +708,55 @@ eMBErrorCode eMBRegInputCB(uint8_t *pucRegBuffer, uint16_t usAddress, uint16_t u
   */
 eMBErrorCode eMBRegHoldingCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t usNRegs, eMBRegisterMode eMode)
 {
+    eMBErrorCode eStatus = MB_ENOERR;
+    uint32_t iRegIndex;
 
-    return MB_ENOERR;
+    if ( (usAddress >= REG_HOLDING_START) && (usAddress + usNRegs <= REG_HOLDING_START + REG_HOLDING_NREGS) )
+    {
+        iRegIndex = (uint32_t)(usAddress - REG_HOLDING_START);
+        switch (eMode)
+        {
+            /* Pass current register values to the protocol stack. */
+            case MB_REG_READ:
+                while (usNRegs > 0)
+                {
+                    *pucRegBuffer++ = *modbus_holding_regs[iRegIndex] >> 8;
+                    *pucRegBuffer++ = *modbus_holding_regs[iRegIndex] & 0xFF;
+                    iRegIndex++;
+                    usNRegs--;
+                }
+                break;
+
+                /* Update current register values with new values from the
+                 * protocol stack. */
+            case MB_REG_WRITE:
+                while (usNRegs > 0)
+                {
+                    uint16_t old_data = *modbus_holding_regs[iRegIndex];
+
+                    *modbus_holding_regs[iRegIndex] = *pucRegBuffer++ << 8;
+                    *modbus_holding_regs[iRegIndex] |= *pucRegBuffer++;
+
+                    //The Update OLED display flag set if currently displayed data were changed
+                    if (iRegIndex == menu_index && old_data != *modbus_holding_regs[iRegIndex])
+                    {
+                        f_update_str1 = true;
+                    }else if (iRegIndex == max_index && old_data != *modbus_holding_regs[iRegIndex])
+                    {
+                        f_update_str2 = true;
+                    }
+
+                    iRegIndex++;
+                    usNRegs--;
+                }
+        }
+    }
+    else
+    {
+        eStatus = MB_ENOREG;
+    }
+
+    return eStatus;
 }
 
 /**
@@ -665,8 +765,49 @@ eMBErrorCode eMBRegHoldingCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_
   */
 eMBErrorCode eMBRegCoilsCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t usNCoils, eMBRegisterMode eMode)
 {
+    eMBErrorCode eStatus = MB_ENOERR;
+    uint32_t iBitIndex;
 
-    return MB_ENOERR;
+    if ( (usAddress >= REG_COILS_START) && (usAddress + usNCoils <= REG_COILS_START + REG_COILS_NREGS) )
+    {
+        iBitIndex = (uint32_t)(usAddress - REG_COILS_START);
+
+        switch (eMode)
+        {
+            case MB_REG_READ:
+            {
+                while (usNCoils > 0)
+                {
+                    UCHAR ucResult = xMBUtilGetBits(&status_register, iBitIndex, 1);
+                    xMBUtilSetBits(pucRegBuffer, iBitIndex - (usAddress - REG_COILS_START), 1, ucResult);
+                    iBitIndex++;
+                    usNCoils--;
+                }
+                break;
+            }
+            case MB_REG_WRITE:
+            {
+                while (usNCoils > 0)
+                {
+                    UCHAR ucResult = xMBUtilGetBits(pucRegBuffer, iBitIndex - (usAddress - REG_COILS_START), 1);
+                    xMBUtilSetBits(&status_register, iBitIndex, 1, ucResult );
+
+                    StatusRegister_Handler(iBitIndex); //Status register bits handler
+
+                    iBitIndex++;
+                    usNCoils--;
+                }
+                break;
+            }
+        }
+    }
+    else
+    {
+        eStatus = MB_ENOREG;
+    }
+
+    return eStatus;
+
 }
 
 /**
@@ -675,10 +816,71 @@ eMBErrorCode eMBRegCoilsCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t 
   */
 eMBErrorCode eMBRegDiscreteCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t usNDiscrete)
 {
+    eMBErrorCode eStatus = MB_ENOERR;
+    uint32_t iBitIndex;
 
-    return MB_ENOERR;
+    if ( (usAddress >= REG_DISCRETE_COILS_START) && (usAddress + usNDiscrete <= REG_DISCRETE_COILS_START + REG_DISCRETE_NREGS) )
+    {
+        iBitIndex = (uint32_t)(usAddress - REG_DISCRETE_COILS_START);
+
+         while (usNDiscrete > 0)
+         {
+             UCHAR ucResult = xMBUtilGetBits(&control_register, iBitIndex, 1);
+             xMBUtilSetBits(pucRegBuffer, iBitIndex - (usAddress - REG_DISCRETE_COILS_START), 1, ucResult);
+
+             //Some bits should be reseted after they were set as it requested in specification
+             if ( (1 << iBitIndex) == PRELOAD_BIT)
+             {
+                 CLEAR_BIT(control_register, PRELOAD_BIT);
+             }
+             else if ( (1 << iBitIndex) == START_BIT)
+             {
+                 CLEAR_BIT(control_register, START_BIT);
+             }
+             else if ( (1 << iBitIndex) == RETURN_BIT)
+             {
+                 CLEAR_BIT(control_register, RETURN_BIT);
+             }
+
+             iBitIndex++;
+             usNDiscrete--;
+         }
+    }
+    else
+    {
+        eStatus = MB_ENOREG;
+    }
+
+    return eStatus;
 }
 
+/**
+  * @brief Status Register Handler
+  * @retval None
+  */
+static void StatusRegister_Handler(uint32_t bit)
+{
+    switch(bit)
+    {
+        case 0: //MANUAL_MODE_BIT
+
+            break;
+
+        case 1: //START_MODE_BIT
+
+            break;
+
+        case 2: //FAILURE_BIT
+
+            break;
+
+        case 3: //CHOCK_SET_BIT
+
+            break;
+
+        default:
+    }
+}
 
 /* USER CODE END 4 */
 
