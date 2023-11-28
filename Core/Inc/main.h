@@ -60,6 +60,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define MANUAL_LED_Pin GPIO_PIN_14
+#define MANUAL_LED_GPIO_Port GPIOG
 #define STOP_KEY_Pin GPIO_PIN_5
 #define STOP_KEY_GPIO_Port GPIOE
 #define RETURN_KEY_Pin GPIO_PIN_6
@@ -68,10 +70,14 @@ void Error_Handler(void);
 #define START_KEY_GPIO_Port GPIOI
 #define PRELOAD_KEY_Pin GPIO_PIN_6
 #define PRELOAD_KEY_GPIO_Port GPIOI
+#define STATUS_LED_Pin GPIO_PIN_9
+#define STATUS_LED_GPIO_Port GPIOG
 #define EN_5EXT_Pin GPIO_PIN_2
 #define EN_5EXT_GPIO_Port GPIOI
 #define OSC_En_Pin GPIO_PIN_15
 #define OSC_En_GPIO_Port GPIOC
+#define CHOCK_LED_Pin GPIO_PIN_7
+#define CHOCK_LED_GPIO_Port GPIOF
 #define OLED_RS_Pin GPIO_PIN_9
 #define OLED_RS_GPIO_Port GPIOF
 #define OLED_DB7_Pin GPIO_PIN_12
@@ -80,6 +86,10 @@ void Error_Handler(void);
 #define OLED_DB5_GPIO_Port GPIOF
 #define LOCK_KEY_Pin GPIO_PIN_11
 #define LOCK_KEY_GPIO_Port GPIOE
+#define FAILURE_LED_Pin GPIO_PIN_9
+#define FAILURE_LED_GPIO_Port GPIOD
+#define START_LED_Pin GPIO_PIN_8
+#define START_LED_GPIO_Port GPIOD
 #define OLED_RW_Pin GPIO_PIN_7
 #define OLED_RW_GPIO_Port GPIOA
 #define OLED_E_Pin GPIO_PIN_1

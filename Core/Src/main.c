@@ -60,6 +60,12 @@ bool f_update_str1, f_update_str2;
 uint8_t menu_index;
 uint8_t max_index;
 
+uint32_t half_sec_cnt; //counter for a half second
+bool f_half_sec; //if half a second passed flag should be set
+
+bool f_link_status; //Link status flag. True if link with a master. Reset to false if no link more than 200ms
+uint32_t link_cnt; //counter to count 200ms interval. If 200ms passed link it means that we have no connection
+                   //with a host and STATUS LED should be turned off
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,7 +94,7 @@ extern void HAL_TIM_PeriodElapsedCallback_Modbus(TIM_HandleTypeDef*);
 extern void HAL_UART_RxCpltCallback_modbus(UART_HandleTypeDef*);
 extern void HAL_UART_TxCpltCallback_modbus(UART_HandleTypeDef *huart);
 
-static void StatusRegister_Handler(uint32_t);
+static void StatusRegister_Handler(uint32_t, uint8_t);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -153,6 +159,12 @@ int main(void)
   f_update_str1 = f_update_str2 = true; //first time OLED display should be updated
   menu_index = 0;
   max_index = sizeof(modbus_holding_regs) / 4 - 1;
+
+  half_sec_cnt = 0;
+  f_half_sec = 0;
+
+  f_link_status = false;
+  link_cnt = 0;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -223,7 +235,41 @@ int main(void)
               OLED_GoTo(0x40);
               OLED_PutStr(oled_str);
           }
+      }
 
+      if (f_half_sec == true)
+      {
+          f_half_sec = false;
+
+          HAL_GPIO_TogglePin(LedOut_GPIO_Port, LedOut_Pin);
+
+          if (READ_BIT(status_register, FAILURE_BIT))
+          {
+              HAL_GPIO_TogglePin(FAILURE_LED_GPIO_Port, FAILURE_LED_Pin);
+          }
+          else
+          {
+              HAL_GPIO_WritePin(FAILURE_LED_GPIO_Port, FAILURE_LED_Pin, GPIO_PIN_RESET);
+          }
+
+      }
+
+      if (f_link_status == true)
+      {
+          if (++link_cnt == 20)
+          {
+              f_link_status = false;
+              link_cnt = 0;
+
+              HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
+          }
+          else
+          {
+              if(link_cnt == 1)
+              {
+                  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
+              }
+          }
       }
 
     /* USER CODE END WHILE */
@@ -374,13 +420,18 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOI_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOG, MANUAL_LED_Pin|STATUS_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(EN_5EXT_GPIO_Port, EN_5EXT_Pin, GPIO_PIN_SET);
@@ -389,7 +440,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(OSC_En_GPIO_Port, OSC_En_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, OLED_RS_Pin|OLED_DB7_Pin|OLED_DB5_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, CHOCK_LED_Pin|OLED_RS_Pin|OLED_DB7_Pin|OLED_DB5_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOD, FAILURE_LED_Pin|START_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(OLED_RW_GPIO_Port, OLED_RW_Pin, GPIO_PIN_RESET);
@@ -399,6 +453,13 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, OLED_DB6_Pin|LedOut_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : MANUAL_LED_Pin STATUS_LED_Pin */
+  GPIO_InitStruct.Pin = MANUAL_LED_Pin|STATUS_LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
   /*Configure GPIO pins : STOP_KEY_Pin RETURN_KEY_Pin LOCK_KEY_Pin */
   GPIO_InitStruct.Pin = STOP_KEY_Pin|RETURN_KEY_Pin|LOCK_KEY_Pin;
@@ -426,12 +487,26 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(OSC_En_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : CHOCK_LED_Pin */
+  GPIO_InitStruct.Pin = CHOCK_LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(CHOCK_LED_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pins : OLED_RS_Pin OLED_DB7_Pin OLED_DB5_Pin */
   GPIO_InitStruct.Pin = OLED_RS_Pin|OLED_DB7_Pin|OLED_DB5_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : FAILURE_LED_Pin START_LED_Pin */
+  GPIO_InitStruct.Pin = FAILURE_LED_Pin|START_LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pin : OLED_RW_Pin */
   GPIO_InitStruct.Pin = OLED_RW_Pin;
@@ -475,10 +550,16 @@ static void MX_GPIO_Init(void)
 
 void HAL_SYSTICK_Callback(void)
 {
-    if(++polling_cnt == polling_period)
+    if (++polling_cnt == polling_period)
     {
         f_polling = true;
         polling_cnt = 0;
+    }
+
+    if (++half_sec_cnt == 500)
+    {
+        half_sec_cnt = 0;
+        f_half_sec = true;
     }
 }
 
@@ -699,6 +780,9 @@ eMBErrorCode eMBRegInputCB(uint8_t *pucRegBuffer, uint16_t usAddress, uint16_t u
         eStatus = MB_ENOREG;
     }
 
+    f_link_status = true;
+    link_cnt = 0;
+
     return eStatus;
 }
 
@@ -756,6 +840,9 @@ eMBErrorCode eMBRegHoldingCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_
         eStatus = MB_ENOREG;
     }
 
+    f_link_status = true;
+    link_cnt = 0;
+
     return eStatus;
 }
 
@@ -792,7 +879,7 @@ eMBErrorCode eMBRegCoilsCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t 
                     UCHAR ucResult = xMBUtilGetBits(pucRegBuffer, iBitIndex - (usAddress - REG_COILS_START), 1);
                     xMBUtilSetBits(&status_register, iBitIndex, 1, ucResult );
 
-                    StatusRegister_Handler(iBitIndex); //Status register bits handler
+                    StatusRegister_Handler(iBitIndex, ucResult); //Status register bits handler
 
                     iBitIndex++;
                     usNCoils--;
@@ -805,6 +892,9 @@ eMBErrorCode eMBRegCoilsCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t 
     {
         eStatus = MB_ENOREG;
     }
+
+    f_link_status = true;
+    link_cnt = 0;
 
     return eStatus;
 
@@ -828,7 +918,7 @@ eMBErrorCode eMBRegDiscreteCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16
              UCHAR ucResult = xMBUtilGetBits(&control_register, iBitIndex, 1);
              xMBUtilSetBits(pucRegBuffer, iBitIndex - (usAddress - REG_DISCRETE_COILS_START), 1, ucResult);
 
-             //Some bits should be reseted after they were set as it requested in specification
+             //Some bits should be reseted after they were read as it requested in specification
              if ( (1 << iBitIndex) == PRELOAD_BIT)
              {
                  CLEAR_BIT(control_register, PRELOAD_BIT);
@@ -851,6 +941,9 @@ eMBErrorCode eMBRegDiscreteCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16
         eStatus = MB_ENOREG;
     }
 
+    f_link_status = true;
+    link_cnt = 0;
+
     return eStatus;
 }
 
@@ -858,24 +951,24 @@ eMBErrorCode eMBRegDiscreteCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16
   * @brief Status Register Handler
   * @retval None
   */
-static void StatusRegister_Handler(uint32_t bit)
+static void StatusRegister_Handler(uint32_t bit, uint8_t val)
 {
     switch(bit)
     {
         case 0: //MANUAL_MODE_BIT
-
+            HAL_GPIO_WritePin(MANUAL_LED_GPIO_Port, MANUAL_LED_Pin, (val == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
             break;
 
         case 1: //START_MODE_BIT
-
+            HAL_GPIO_WritePin(START_LED_GPIO_Port, START_LED_Pin, (val == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
             break;
 
         case 2: //FAILURE_BIT
-
+            HAL_GPIO_WritePin(FAILURE_LED_GPIO_Port, FAILURE_LED_Pin, (val == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
             break;
 
         case 3: //CHOCK_SET_BIT
-
+            HAL_GPIO_WritePin(CHOCK_LED_GPIO_Port, CHOCK_LED_Pin, (val == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
             break;
 
         default:
