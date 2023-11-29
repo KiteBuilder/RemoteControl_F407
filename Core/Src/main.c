@@ -267,7 +267,7 @@ int main(void)
           {
               if(link_cnt == 1)
               {
-                  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
+                  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_SET);
               }
           }
       }
@@ -673,6 +673,10 @@ void Stop_Key_Handler(key_state_e state)
     {
         SET_BIT(control_register, STOP_BIT);
     }
+    else
+    {
+        CLEAR_BIT(control_register, STOP_BIT);
+    }
 }
 
 /**
@@ -685,6 +689,10 @@ void Lock_Key_Handler(key_state_e state)
     if (state == PRESSED)
     {
         SET_BIT(control_register, LOCK_BIT);
+    }
+    else
+    {
+        CLEAR_BIT(control_register, LOCK_BIT);
     }
 }
 
