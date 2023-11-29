@@ -45,6 +45,7 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim3;
 
+UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
@@ -73,6 +74,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_UART4_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -178,6 +180,7 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM3_Init();
   MX_USART1_UART_Init();
+  MX_UART4_Init();
 
   /* Initialize interrupts */
   MX_NVIC_Init();
@@ -195,9 +198,9 @@ int main(void)
   //Initialize ModbusRTU module and enable it
   __disable_irq();
   MT_PORT_SetTimerModule(&htim3);
-  MT_PORT_SetUartModule(&huart1); //use uart1 for debug purposes
+  MT_PORT_SetUartModule(&huart4); //use uart1 for debug purposes
   eMBErrorCode eStatus;
-  eStatus = eMBInit(MB_RTU, MODBUS_SLAVE_ADDRESS, 0, huart1.Init.BaudRate, MB_PAR_NONE);
+  eStatus = eMBInit(MB_RTU, MODBUS_SLAVE_ADDRESS, 0, huart4.Init.BaudRate, MB_PAR_NONE);
   eStatus = eMBEnable();
   if (eStatus != MB_ENOERR)
   {
@@ -376,6 +379,39 @@ static void MX_TIM3_Init(void)
 }
 
 /**
+  * @brief UART4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_UART4_Init(void)
+{
+
+  /* USER CODE BEGIN UART4_Init 0 */
+
+  /* USER CODE END UART4_Init 0 */
+
+  /* USER CODE BEGIN UART4_Init 1 */
+
+  /* USER CODE END UART4_Init 1 */
+  huart4.Instance = UART4;
+  huart4.Init.BaudRate = 115200;
+  huart4.Init.WordLength = UART_WORDLENGTH_8B;
+  huart4.Init.StopBits = UART_STOPBITS_1;
+  huart4.Init.Parity = UART_PARITY_NONE;
+  huart4.Init.Mode = UART_MODE_TX_RX;
+  huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart4.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN UART4_Init 2 */
+
+  /* USER CODE END UART4_Init 2 */
+
+}
+
+/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -421,17 +457,32 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOG_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOI_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOG, MANUAL_LED_Pin|STATUS_LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, RXEN_L_Pin|OLED_E_Pin|OLED_DB4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(UART_MOD_H_GPIO_Port, UART_MOD_H_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(TE_485_L_GPIO_Port, TE_485_L_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(HDPLX_H_GPIO_Port, HDPLX_H_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(DXEN_H_GPIO_Port, DXEN_H_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(EN_5EXT_GPIO_Port, EN_5EXT_Pin, GPIO_PIN_SET);
@@ -449,17 +500,42 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(OLED_RW_GPIO_Port, OLED_RW_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, OLED_E_Pin|OLED_DB4_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, OLED_DB6_Pin|LedOut_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : MANUAL_LED_Pin STATUS_LED_Pin */
-  GPIO_InitStruct.Pin = MANUAL_LED_Pin|STATUS_LED_Pin;
+  /*Configure GPIO pins : MANUAL_LED_Pin DXEN_H_Pin STATUS_LED_Pin */
+  GPIO_InitStruct.Pin = MANUAL_LED_Pin|DXEN_H_Pin|STATUS_LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : RXEN_L_Pin */
+  GPIO_InitStruct.Pin = RXEN_L_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(RXEN_L_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : UART_MOD_H_Pin FAILURE_LED_Pin START_LED_Pin */
+  GPIO_InitStruct.Pin = UART_MOD_H_Pin|FAILURE_LED_Pin|START_LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : TE_485_L_Pin */
+  GPIO_InitStruct.Pin = TE_485_L_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(TE_485_L_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : HDPLX_H_Pin */
+  GPIO_InitStruct.Pin = HDPLX_H_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(HDPLX_H_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : STOP_KEY_Pin RETURN_KEY_Pin LOCK_KEY_Pin */
   GPIO_InitStruct.Pin = STOP_KEY_Pin|RETURN_KEY_Pin|LOCK_KEY_Pin;
@@ -500,13 +576,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : FAILURE_LED_Pin START_LED_Pin */
-  GPIO_InitStruct.Pin = FAILURE_LED_Pin|START_LED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pin : OLED_RW_Pin */
   GPIO_InitStruct.Pin = OLED_RW_Pin;
@@ -981,6 +1050,26 @@ static void StatusRegister_Handler(uint32_t bit, uint8_t val)
 
         default:
     }
+}
+
+/**
+  * @brief Enable LTC2870 RX mode
+  * @retval
+  */
+void LTC2870_RX485_En_Rx()
+{
+    HAL_GPIO_WritePin(RXEN_L_GPIO_Port, RXEN_L_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(DXEN_H_GPIO_Port, DXEN_H_Pin, GPIO_PIN_RESET);
+}
+
+/**
+  * @brief Enable LTC2870 TX mode
+  * @retval
+  */
+void LTC2870_RX485_En_Tx()
+{
+    HAL_GPIO_WritePin(RXEN_L_GPIO_Port, RXEN_L_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DXEN_H_GPIO_Port, DXEN_H_Pin, GPIO_PIN_SET);
 }
 
 /* USER CODE END 4 */

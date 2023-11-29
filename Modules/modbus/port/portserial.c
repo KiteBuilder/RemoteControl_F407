@@ -45,6 +45,7 @@ vMBPortSerialEnable( BOOL xRxEnable, BOOL xTxEnable )
     }
     else
     {
+      LTC2870_RX485_En_Rx();
       HAL_UART_Receive_IT(modbusUart, &rxByte, 1);
     }
     if (xTxEnable == FALSE)
@@ -53,6 +54,7 @@ vMBPortSerialEnable( BOOL xRxEnable, BOOL xTxEnable )
     }
     else
     {
+      LTC2870_RX485_En_Tx();
       if (modbusUart->gState == HAL_UART_STATE_READY)
       {
         prvvUARTTxReadyISR();

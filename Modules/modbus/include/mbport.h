@@ -122,6 +122,10 @@ BOOL            xMBTCPPortGetRequest( UCHAR **ppucMBTCPFrame, USHORT * usTCPLeng
 
 BOOL            xMBTCPPortSendResponse( const UCHAR *pucMBTCPFrame, USHORT usTCPLength );
 
+/* ----------------------- RX485 Enable RX/TX functions----------------------*/
+extern void LTC2870_RX485_En_Rx();
+extern void LTC2870_RX485_En_Tx();
+
 #ifdef __cplusplus
 PR_END_EXTERN_C
 #endif

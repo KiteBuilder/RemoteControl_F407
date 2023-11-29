@@ -62,10 +62,20 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define MANUAL_LED_Pin GPIO_PIN_14
 #define MANUAL_LED_GPIO_Port GPIOG
+#define RXEN_L_Pin GPIO_PIN_3
+#define RXEN_L_GPIO_Port GPIOB
+#define UART_MOD_H_Pin GPIO_PIN_7
+#define UART_MOD_H_GPIO_Port GPIOD
+#define TE_485_L_Pin GPIO_PIN_12
+#define TE_485_L_GPIO_Port GPIOC
+#define HDPLX_H_Pin GPIO_PIN_15
+#define HDPLX_H_GPIO_Port GPIOA
 #define STOP_KEY_Pin GPIO_PIN_5
 #define STOP_KEY_GPIO_Port GPIOE
 #define RETURN_KEY_Pin GPIO_PIN_6
 #define RETURN_KEY_GPIO_Port GPIOE
+#define DXEN_H_Pin GPIO_PIN_10
+#define DXEN_H_GPIO_Port GPIOG
 #define START_KEY_Pin GPIO_PIN_7
 #define START_KEY_GPIO_Port GPIOI
 #define PRELOAD_KEY_Pin GPIO_PIN_6
