@@ -59,7 +59,7 @@ uint32_t polling_period; //10ms if SysTick configured for 1ms tick interrupt
 char oled_str[LCD_STR_LEN];
 bool f_update_str1, f_update_str2;
 uint8_t menu_index;
-uint8_t max_index;
+uint8_t max_menu_index;
 
 uint32_t half_sec_cnt; //counter for a half second
 bool f_half_sec; //if half a second passed flag should be set
@@ -82,21 +82,21 @@ static void MX_NVIC_Init(void);
 static void Keys_Init(void);
 static void Keys_Polling(void);
 
-void Preload_Key_Handler(key_state_e);
-void Start_Key_Handler(key_state_e);
-void Return_Key_Handler(key_state_e);
-void Stop_Key_Handler(key_state_e);
-void Lock_Key_Handler(key_state_e);
-void Window_Key_Handler(key_state_e);
+static void Preload_Key_Handler(key_state_e);
+static void Start_Key_Handler(key_state_e);
+static void Return_Key_Handler(key_state_e);
+static void Stop_Key_Handler(key_state_e);
+static void Lock_Key_Handler(key_state_e);
+static void Window_Key_Handler(key_state_e);
 
-void OLED_Str1_Handler(char*, uint8_t);
-void OLED_Str2_Handler(char*);
+static void OLED_Str1_Handler(char*, uint8_t);
+static void OLED_Str2_Handler(char*);
 
 extern void HAL_TIM_PeriodElapsedCallback_Modbus(TIM_HandleTypeDef*);
 extern void HAL_UART_RxCpltCallback_modbus(UART_HandleTypeDef*);
 extern void HAL_UART_TxCpltCallback_modbus(UART_HandleTypeDef *huart);
 
-static void StatusRegister_Handler(uint32_t, uint8_t);
+static void StatusRegister_Handler();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -105,7 +105,7 @@ static void StatusRegister_Handler(uint32_t, uint8_t);
 //ModbusRTU variables
 //
 //Modbus holding registers and registers array
-uint16_t pressure_M1, pressure_M2, pressure_M3, pressure_M4, accum_voltage, tempr_compr_RT1, error_code;
+uint16_t pressure_M1, pressure_M2, pressure_M3, pressure_M4, accum_voltage, tempr_compr_RT1, error_code, status_register, control_register;
 
 uint16_t *modbus_holding_regs[] = {&pressure_M1, //M1, main receiver 0.0 - 25.0Bar
                                    &pressure_M2, //M2, control receiver 0.0 - 25.0Bar
@@ -113,19 +113,16 @@ uint16_t *modbus_holding_regs[] = {&pressure_M1, //M1, main receiver 0.0 - 25.0B
                                    &pressure_M4, //M4, working cylinder pressure 0.0-25.0Bar
                                    &accum_voltage, //Compressor accumulator voltage 0.0-16.0V
                                    &tempr_compr_RT1, //Compressor body temperature 0-120C
-                                   &error_code}; //Error code E00-E99 (E00 - no error)
+                                   &error_code, //Error code E00-E99 (E00 - no error)
+                                   &status_register};
 
-//Modbus coils - status register
-uint8_t status_register;
-
+//Status register bits
 #define MANUAL_MODE_BIT     0x01 // Mode for testing the system
 #define START_MODE_BIT      0x02 // Mode for running the system up
 #define FAILURE_BIT         0x04 // Emergency system mode
 #define CHOCK_SET_BIT       0x08 // To set if the chock set in the carriage lock
 
-//Modbus contacts - control register
-uint8_t control_register;
-
+//Control register bits
 #define PRELOAD_BIT         0x01 // To supply a low pressure to the main cylinder
 #define START_BIT           0x02 // To supply a full pressure to the main cylinder
 #define RETURN_BIT          0x04 // To release the pressure in the main cylinder and supply a low pressure to the rod cavity area for return the system to the initial state
@@ -160,7 +157,7 @@ int main(void)
 
   f_update_str1 = f_update_str2 = true; //first time OLED display should be updated
   menu_index = 0;
-  max_index = sizeof(modbus_holding_regs) / 4 - 1;
+  max_menu_index = sizeof(modbus_holding_regs) / 4 - 2;
 
   half_sec_cnt = 0;
   f_half_sec = 0;
@@ -697,7 +694,7 @@ static void Keys_Polling(void)
   * @param state: state of the key - pressed/released
   * @retval None
   */
-void Preload_Key_Handler(key_state_e state)
+static void Preload_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
@@ -710,7 +707,7 @@ void Preload_Key_Handler(key_state_e state)
   * @param state: state of the key - pressed/released
   * @retval None
   */
-void Start_Key_Handler(key_state_e state)
+static void Start_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
@@ -723,7 +720,7 @@ void Start_Key_Handler(key_state_e state)
   * @param state: state of the key - pressed/released
   * @retval None
   */
-void Return_Key_Handler(key_state_e state)
+static void Return_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
@@ -736,7 +733,7 @@ void Return_Key_Handler(key_state_e state)
   * @param state: state of the key - pressed/released
   * @retval None
   */
-void Stop_Key_Handler(key_state_e state)
+static void Stop_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
@@ -753,7 +750,7 @@ void Stop_Key_Handler(key_state_e state)
   * @param state: state of the key - pressed/released
   * @retval None
   */
-void Lock_Key_Handler(key_state_e state)
+static void Lock_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
@@ -770,11 +767,11 @@ void Lock_Key_Handler(key_state_e state)
   * @param state: state of the key - pressed/released
   * @retval None
   */
-void Window_Key_Handler(key_state_e state)
+static void Window_Key_Handler(key_state_e state)
 {
     if (state == PRESSED)
     {
-        if (++menu_index == max_index)
+        if (++menu_index == max_menu_index)
         {
             menu_index = 0;
         }
@@ -788,7 +785,7 @@ void Window_Key_Handler(key_state_e state)
   * @param p_str: pointer to string
   * @retval None
   */
-void OLED_Str1_Handler(char* p_str, uint8_t index)
+static void OLED_Str1_Handler(char* p_str, uint8_t index)
 {
     switch (index)
     {
@@ -826,7 +823,7 @@ void OLED_Str1_Handler(char* p_str, uint8_t index)
   * @param p_str: pointer to string
   * @retval None
   */
-void OLED_Str2_Handler(char*)
+static void OLED_Str2_Handler(char*)
 {
     sprintf(oled_str, "Status-E%02d     ", error_code);
 }
@@ -838,19 +835,17 @@ void OLED_Str2_Handler(char*)
 eMBErrorCode eMBRegInputCB(uint8_t *pucRegBuffer, uint16_t usAddress, uint16_t usNRegs)
 {
     eMBErrorCode eStatus = MB_ENOERR;
-    uint32_t iRegIndex;
 
     if ((usAddress >= REG_INPUT_START) &&
         (usAddress + usNRegs <= REG_INPUT_START + REG_INPUT_NREGS))
     {
-        iRegIndex = (uint32_t)(usAddress - REG_INPUT_START);
-        while(usNRegs > 0)
-        {
-            *pucRegBuffer++ = *modbus_holding_regs[iRegIndex] >> 8;
-            *pucRegBuffer++ = *modbus_holding_regs[iRegIndex] & 0xFF;
-            iRegIndex++;
-            usNRegs--;
-        }
+        *pucRegBuffer++ = control_register >> 8;
+        *pucRegBuffer++ = control_register & 0xFF;
+
+        //Some bits should be reseted after they were read as it requested in specification
+        CLEAR_BIT(control_register, PRELOAD_BIT);
+        CLEAR_BIT(control_register, START_BIT);
+        CLEAR_BIT(control_register, RETURN_BIT);
     }
     else
     {
@@ -898,11 +893,16 @@ eMBErrorCode eMBRegHoldingCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_
                     *modbus_holding_regs[iRegIndex] = *pucRegBuffer++ << 8;
                     *modbus_holding_regs[iRegIndex] |= *pucRegBuffer++;
 
+                    if (modbus_holding_regs[iRegIndex] == &status_register)
+                    {
+                        StatusRegister_Handler();
+                    }
+
                     //The Update OLED display flag set if currently displayed data were changed
                     if (iRegIndex == menu_index && old_data != *modbus_holding_regs[iRegIndex])
                     {
                         f_update_str1 = true;
-                    }else if (iRegIndex == max_index && old_data != *modbus_holding_regs[iRegIndex])
+                    }else if (iRegIndex == max_menu_index && old_data != *modbus_holding_regs[iRegIndex])
                     {
                         f_update_str2 = true;
                     }
@@ -929,52 +929,7 @@ eMBErrorCode eMBRegHoldingCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_
   */
 eMBErrorCode eMBRegCoilsCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t usNCoils, eMBRegisterMode eMode)
 {
-    eMBErrorCode eStatus = MB_ENOERR;
-    uint32_t iBitIndex;
-
-    if ( (usAddress >= REG_COILS_START) && (usAddress + usNCoils <= REG_COILS_START + REG_COILS_NREGS) )
-    {
-        iBitIndex = (uint32_t)(usAddress - REG_COILS_START);
-
-        switch (eMode)
-        {
-            case MB_REG_READ:
-            {
-                while (usNCoils > 0)
-                {
-                    UCHAR ucResult = xMBUtilGetBits(&status_register, iBitIndex, 1);
-                    xMBUtilSetBits(pucRegBuffer, iBitIndex - (usAddress - REG_COILS_START), 1, ucResult);
-                    iBitIndex++;
-                    usNCoils--;
-                }
-                break;
-            }
-            case MB_REG_WRITE:
-            {
-                while (usNCoils > 0)
-                {
-                    UCHAR ucResult = xMBUtilGetBits(pucRegBuffer, iBitIndex - (usAddress - REG_COILS_START), 1);
-                    xMBUtilSetBits(&status_register, iBitIndex, 1, ucResult );
-
-                    StatusRegister_Handler(iBitIndex, ucResult); //Status register bits handler
-
-                    iBitIndex++;
-                    usNCoils--;
-                }
-                break;
-            }
-        }
-    }
-    else
-    {
-        eStatus = MB_ENOREG;
-    }
-
-    f_link_status = true;
-    link_cnt = 0;
-
-    return eStatus;
-
+    return MB_ENOREG;
 }
 
 /**
@@ -983,73 +938,19 @@ eMBErrorCode eMBRegCoilsCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t 
   */
 eMBErrorCode eMBRegDiscreteCB(uint8_t * pucRegBuffer, uint16_t usAddress, uint16_t usNDiscrete)
 {
-    eMBErrorCode eStatus = MB_ENOERR;
-    uint32_t iBitIndex;
-
-    if ( (usAddress >= REG_DISCRETE_COILS_START) && (usAddress + usNDiscrete <= REG_DISCRETE_COILS_START + REG_DISCRETE_NREGS) )
-    {
-        iBitIndex = (uint32_t)(usAddress - REG_DISCRETE_COILS_START);
-
-         while (usNDiscrete > 0)
-         {
-             UCHAR ucResult = xMBUtilGetBits(&control_register, iBitIndex, 1);
-             xMBUtilSetBits(pucRegBuffer, iBitIndex - (usAddress - REG_DISCRETE_COILS_START), 1, ucResult);
-
-             //Some bits should be reseted after they were read as it requested in specification
-             if ( (1 << iBitIndex) == PRELOAD_BIT)
-             {
-                 CLEAR_BIT(control_register, PRELOAD_BIT);
-             }
-             else if ( (1 << iBitIndex) == START_BIT)
-             {
-                 CLEAR_BIT(control_register, START_BIT);
-             }
-             else if ( (1 << iBitIndex) == RETURN_BIT)
-             {
-                 CLEAR_BIT(control_register, RETURN_BIT);
-             }
-
-             iBitIndex++;
-             usNDiscrete--;
-         }
-    }
-    else
-    {
-        eStatus = MB_ENOREG;
-    }
-
-    f_link_status = true;
-    link_cnt = 0;
-
-    return eStatus;
+    return MB_ENOREG;
 }
 
 /**
   * @brief Status Register Handler
   * @retval None
   */
-static void StatusRegister_Handler(uint32_t bit, uint8_t val)
+static void StatusRegister_Handler()
 {
-    switch(bit)
-    {
-        case 0: //MANUAL_MODE_BIT
-            HAL_GPIO_WritePin(MANUAL_LED_GPIO_Port, MANUAL_LED_Pin, (val == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-            break;
-
-        case 1: //START_MODE_BIT
-            HAL_GPIO_WritePin(START_LED_GPIO_Port, START_LED_Pin, (val == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-            break;
-
-        case 2: //FAILURE_BIT
-            HAL_GPIO_WritePin(FAILURE_LED_GPIO_Port, FAILURE_LED_Pin, (val == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-            break;
-
-        case 3: //CHOCK_SET_BIT
-            HAL_GPIO_WritePin(CHOCK_LED_GPIO_Port, CHOCK_LED_Pin, (val == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-            break;
-
-        default:
-    }
+    HAL_GPIO_WritePin(MANUAL_LED_GPIO_Port , MANUAL_LED_Pin , READ_BIT(status_register, MANUAL_MODE_BIT) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(START_LED_GPIO_Port  , START_LED_Pin  , READ_BIT(status_register, START_MODE_BIT)  ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(FAILURE_LED_GPIO_Port, FAILURE_LED_Pin, READ_BIT(status_register, FAILURE_BIT)     ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(CHOCK_LED_GPIO_Port  , CHOCK_LED_Pin  , READ_BIT(status_register, CHOCK_SET_BIT)   ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 /**

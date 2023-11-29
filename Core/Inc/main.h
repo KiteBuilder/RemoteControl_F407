@@ -118,16 +118,16 @@ void Error_Handler(void);
 #define MODBUS_SLAVE_ADDRESS     0x03 //Modbus slave address(ID)
 
 #define REG_COILS_START          1
-#define REG_COILS_NREGS          4
+#define REG_COILS_NREGS          0
 
 #define REG_DISCRETE_COILS_START 1
-#define REG_DISCRETE_NREGS       5
+#define REG_DISCRETE_NREGS       0
 
-#define REG_INPUT_START          1
-#define REG_INPUT_NREGS          7
+#define REG_INPUT_START          2
+#define REG_INPUT_NREGS          1
 
-#define REG_HOLDING_START        1
-#define REG_HOLDING_NREGS        7
+#define REG_HOLDING_START        2
+#define REG_HOLDING_NREGS        8
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
