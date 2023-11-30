@@ -56,7 +56,7 @@ bool f_polling; //true if polling counter is equal to polling period
 uint32_t polling_cnt; //polling counter
 uint32_t polling_period; //10ms if SysTick configured for 1ms tick interrupt
 
-char oled_str[LCD_STR_LEN];
+char oled_str[LCD_STR_LEN * 2];
 bool f_update_str1, f_update_str2;
 uint8_t menu_index;
 uint8_t max_menu_index;
@@ -811,7 +811,7 @@ static void OLED_Str1_Handler(char* p_str, uint8_t index)
             break;
 
         case 5:
-            sprintf(oled_str, "RT1Temp=%3dC  ", tempr_compr_RT1);
+            sprintf(oled_str, "RT1Temp=%3dC   ", tempr_compr_RT1);
             break;
 
         default:
@@ -947,7 +947,7 @@ static void StatusRegister_Handler()
 {
     HAL_GPIO_WritePin(MANUAL_LED_GPIO_Port , MANUAL_LED_Pin , READ_BIT(status_register, MANUAL_MODE_BIT) ? GPIO_PIN_SET : GPIO_PIN_RESET);
     HAL_GPIO_WritePin(START_LED_GPIO_Port  , START_LED_Pin  , READ_BIT(status_register, START_MODE_BIT)  ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(FAILURE_LED_GPIO_Port, FAILURE_LED_Pin, READ_BIT(status_register, FAILURE_BIT)     ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    //HAL_GPIO_WritePin(FAILURE_LED_GPIO_Port, FAILURE_LED_Pin, READ_BIT(status_register, FAILURE_BIT)     ? GPIO_PIN_SET : GPIO_PIN_RESET);
     HAL_GPIO_WritePin(CHOCK_LED_GPIO_Port  , CHOCK_LED_Pin  , READ_BIT(status_register, CHOCK_SET_BIT)   ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
