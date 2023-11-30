@@ -35,5 +35,6 @@ typedef struct _key_st_
 
 void Key_Init(key_t*, GPIO_TypeDef*, uint16_t, key_active_level_e, p_key_handler);
 void Key_CheckState(key_t*);
+key_state_e Key_InstantCheck(key_t*);
 
 #endif /* KEY_H_ */

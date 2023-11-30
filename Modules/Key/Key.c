@@ -87,3 +87,20 @@ void Key_CheckState(key_t *p_key)
         --p_key->guard_cnt;
     }
 }
+
+/**
+  * @brief Instant check the key state
+  * @param *key: key structure pointer
+  * @retval key_state_e
+  */
+key_state_e Key_InstantCheck(key_t *p_key)
+{
+    if ( HAL_GPIO_ReadPin(p_key->gpio, p_key->pin) ==  (p_key->level == LO_LEVEL ? GPIO_PIN_RESET : GPIO_PIN_SET) )
+    {
+        return PRESSED;
+    }
+    else
+    {
+        return RELEASED;
+    }
+}

@@ -97,6 +97,7 @@ extern void HAL_UART_RxCpltCallback_modbus(UART_HandleTypeDef*);
 extern void HAL_UART_TxCpltCallback_modbus(UART_HandleTypeDef *huart);
 
 static void StatusRegister_Handler();
+static void ControlRegister_Handler();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -842,10 +843,7 @@ eMBErrorCode eMBRegInputCB(uint8_t *pucRegBuffer, uint16_t usAddress, uint16_t u
         *pucRegBuffer++ = control_register >> 8;
         *pucRegBuffer++ = control_register & 0xFF;
 
-        //Some bits should be reseted after they were read as it requested in specification
-        CLEAR_BIT(control_register, PRELOAD_BIT);
-        CLEAR_BIT(control_register, START_BIT);
-        CLEAR_BIT(control_register, RETURN_BIT);
+        ControlRegister_Handler();
     }
     else
     {
@@ -951,6 +949,35 @@ static void StatusRegister_Handler()
     HAL_GPIO_WritePin(START_LED_GPIO_Port  , START_LED_Pin  , READ_BIT(status_register, START_MODE_BIT)  ? GPIO_PIN_SET : GPIO_PIN_RESET);
     HAL_GPIO_WritePin(FAILURE_LED_GPIO_Port, FAILURE_LED_Pin, READ_BIT(status_register, FAILURE_BIT)     ? GPIO_PIN_SET : GPIO_PIN_RESET);
     HAL_GPIO_WritePin(CHOCK_LED_GPIO_Port  , CHOCK_LED_Pin  , READ_BIT(status_register, CHOCK_SET_BIT)   ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+/**
+  * @brief Control Register Handler
+  * @retval None
+  */
+static void ControlRegister_Handler()
+{
+    //Some bits should be reseted after they were read as it requested in specification
+    //CLEAR_BIT(control_register, PRELOAD_BIT);
+    //CLEAR_BIT(control_register, START_BIT);
+    //CLEAR_BIT(control_register, RETURN_BIT);
+
+    //Here logic slightly changed. If register was requested by Modbus, the corresponding bit was set,
+    //but key was released   -  this bit should be released too. Otherwise should be left in the same state
+    if (READ_BIT(control_register, PRELOAD_BIT) != 0 && Key_InstantCheck(&preload_key) == RELEASED)
+    {
+        CLEAR_BIT(control_register, PRELOAD_BIT);
+    }
+
+    if (READ_BIT(control_register, START_BIT) != 0 && Key_InstantCheck(&start_key) == RELEASED)
+    {
+        CLEAR_BIT(control_register, START_BIT);
+    }
+
+    if (READ_BIT(control_register, RETURN_BIT) != 0 && Key_InstantCheck(&return_key) == RELEASED)
+    {
+        CLEAR_BIT(control_register, RETURN_BIT);
+    }
 }
 
 /**
